@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import joblib
 
 from pathlib import Path
 from dotenv import load_dotenv
@@ -17,7 +18,7 @@ frontend_urls = [
     url.strip().rstrip("/")
     for url in os.getenv(
         "FRONTEND_URLS",
-        "http://localhost:5173"
+        "http://localhost:5173,http://127.0.0.1:5173"
     ).split(",")
     if url.strip()
 ]
@@ -31,6 +32,17 @@ app.add_middleware(
 )
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
+MODEL_DIR = Path(__file__).resolve().parent / "models"
+
+model = joblib.load(MODEL_DIR / "kmeans_model.pkl")
+scaler = joblib.load(MODEL_DIR / "scaler.pkl")
+
+FEATURES = [
+    "courses_enrolled",
+    "avg_feedback",
+    "previous_attempts",
+    "days_viewed"
+]
 
 def load_csv(filename):
     path = DATA_DIR / filename
@@ -112,3 +124,49 @@ def get_recommendations(student_id: int):
     return result.sort_values(
         "Recommendation Rank"
     ).fillna("").to_dict(orient="records")
+
+@app.get("/api/students/{student_id}/personalized-recommendations")
+def personalized_recommendations(student_id: int, course_name: str):
+
+    students = load_csv("student_profiles.csv")
+    resources = load_csv("resource_catalogue.csv")
+
+    student = students[
+        students["Student-Id"] == student_id
+    ]
+
+    if student.empty:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    student = student.iloc[0]
+
+    student_features = student[FEATURES].to_frame().T
+    scaled_features = scaler.transform(student_features)
+
+    cluster = int(model.predict(scaled_features)[0])
+
+    course_resources = resources[
+        resources["Course Name"].str.lower() == course_name.lower()
+    ].copy()
+
+    if course_resources.empty:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    if cluster == 0:
+        priority_map = {"Beginner": 1, "Intermediate": 2}
+    else:
+        priority_map = {"Intermediate": 1, "Beginner": 2}
+
+    course_resources["Priority"] = course_resources[
+        "Difficulty"
+    ].map(priority_map)
+
+    course_resources = course_resources.sort_values(
+        ["Priority", "Resource ID"]
+    )
+
+    return {
+        "student_id": student_id,
+        "cluster": cluster,
+        "recommendations": course_resources.to_dict(orient="records")
+    }

@@ -1,28 +1,19 @@
 # Python
-.venv/
-venv/
 __pycache__/
 *.py[cod]
-.ipynb_checkpoints/
+*.log
+ml-env/
+venv/
+.env
 
 # Node
 node_modules/
-dist/
+frontend/node_modules/
+frontend/dist/
 
-# Environment and secrets
-.env
-.env.*
-!.env.example
-
-# Editor and OS
+# IDE
 .vscode/
+.idea/
+
+# OS
 .DS_Store
-Thumbs.db
-
-# Temporary files
-*.log
-*.tmp
-
-# Large raw datasets and generated duplicates
-dataset/raw/
-outputs/
